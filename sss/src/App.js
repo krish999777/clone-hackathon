@@ -16,24 +16,26 @@ import Impact from './content/Impact';
 function App() {
   return (
     // Using a React Fragment <> to avoid an unnecessary div in the DOM
-    <>
+    <div className="app-shell">
       <Router>
         <Navbar />
         <Toaster position="top-right" />
-        <Routes>
-          {/* Use the "element" prop for components in v6 */}
-          <Route path='/' element={<HomePage />} />
-          <Route path='/postdonation' element={<Donation />} />
-          <Route path='/browsedonation' element={<BrowseDonations />} />
-          <Route path='/about' element={<AboutPage />} />
-          <Route path='/impact' element={<Impact/>} />
-          {/* This "catch-all" route should be last */}
-          <Route path='*' element={<PageNotFound />} />
+        <main className="app-content">
+          <Routes>
+            {/* Use the "element" prop for components in v6 */}
+            <Route path='/' element={<HomePage />} />
+            <Route path='/postdonation' element={<Donation />} />
+            <Route path='/browsedonation' element={<BrowseDonations />} />
+            <Route path='/about' element={<AboutPage />} />
+            <Route path='/impact' element={<Impact/>} />
+            {/* This "catch-all" route should be last */}
+            <Route path='*' element={<PageNotFound />} />
           
-        </Routes>
+          </Routes>
+        </main>
         <Footer />
       </Router>
-    </>
+    </div>
   );
 }
 

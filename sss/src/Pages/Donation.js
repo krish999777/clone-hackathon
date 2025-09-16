@@ -1,8 +1,7 @@
 // src/Pages/Donation.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+// Removed Firestore in favor of simple JSON API
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -21,12 +20,84 @@ const Donation = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [errors, setErrors] = useState({});
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
+  
+
+  // Validation helpers
+  const normalizeDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toISOString().slice(0, 10);
+  };
+
+  const validate = (values) => {
+    const newErrors = {};
+
+    // Food item name: should not contain numbers
+    if (!values.foodItemName || !/^[A-Za-z\s]+$/.test(values.foodItemName)) {
+      newErrors.foodItemName = 'Food item name must contain only letters and spaces.';
+    }
+
+    // Pickup name: should not contain numbers
+    if (!values.pickupName || !/^[A-Za-z\s]+$/.test(values.pickupName)) {
+      newErrors.pickupName = 'Name must contain only letters and spaces.';
+    }
+
+    // Number of meals: must be a number and > 0
+    if (!/^\d+$/.test(String(values.quantity))) {
+      newErrors.quantity = 'Number of meals must be a valid number.';
+    } else if (Number(values.quantity) <= 0) {
+      newErrors.quantity = 'Number of meals must be greater than 0.';
+    }
+
+    // Prepared On: only today, yesterday, or exactly 2 days before today allowed
+    if (!values.preparedOn) {
+      newErrors.preparedOn = 'Please select the prepared date.';
+    } else {
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0, 10);
+      const yesterday = new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000);
+      const yesterdayStr = yesterday.toISOString().slice(0, 10);
+      const twoDaysBefore = new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000);
+      const twoDaysBeforeStr = twoDaysBefore.toISOString().slice(0, 10);
+      const candidate = normalizeDate(values.preparedOn);
+      if (candidate !== todayStr && candidate !== yesterdayStr && candidate !== twoDaysBeforeStr) {
+        newErrors.preparedOn = 'Prepared date must be today, yesterday, or 2 days before.';
+      }
+    }
+
+    // Phone: exactly 10 digits (sanitize non-digits before check)
+    const sanitizedPhone = String(values.pickupPhone || '').replace(/\D/g, '');
+    if (!/^\d{10}$/.test(sanitizedPhone)) {
+      newErrors.pickupPhone = 'Phone number must be exactly 10 digits.';
+    }
+
+    return newErrors;
+  };
+
+  const hasErrors = (errs) => Object.keys(errs).length > 0;
 
   // Handle text inputs
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    let nextValue = value;
+    if (name === 'pickupPhone') {
+      // keep only digits and clamp to 10
+      nextValue = String(value).replace(/\D/g, '').slice(0, 10);
+    }
+    if (name === 'quantity') {
+      // keep only digits, allow empty, no leading zeros normalization
+      nextValue = String(value).replace(/\D/g, '');
+    }
+    setFormData((prev) => ({ ...prev, [name]: nextValue }));
+    // live-validate the changed field
+    setErrors((prev) => {
+      const updated = { ...prev };
+      const draft = { ...formData, [name]: nextValue };
+      const v = validate(draft);
+      return v;
+    });
   };
 
   // Fetch current location
@@ -54,6 +125,7 @@ const Donation = () => {
             ...prev,
             address: data.display_name || 'Could not determine address',
           }));
+          
         } catch {
           setFormData((prev) => ({ ...prev, address: 'Failed to fetch address.' }));
         } finally {
@@ -88,6 +160,15 @@ const Donation = () => {
     setError(null);
 
     try {
+      // Validate
+      const v = validate(formData);
+      setErrors(v);
+      if (hasErrors(v)) {
+        toast.error('Please fix the highlighted errors before submitting.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const preparedDate = new Date(formData.preparedOn);
       const hoursToExpire = Number(formData.expiryTime);
       const expiryDate = new Date(
@@ -98,17 +179,23 @@ const Donation = () => {
         itemName: formData.foodItemName,
         meals: Number(formData.quantity),
         veg: formData.vegNonVeg === 'Veg',
-        preparedOn: preparedDate,
-        expiryOn: expiryDate,
+        preparedOn: preparedDate.toISOString(),
+        expiryOn: expiryDate.toISOString(),
         address: formData.address,
         contactName: formData.pickupName,
         contactPhone: formData.pickupPhone,
         contactType: 'Individual',
         status: 'notAccepted',
-        createdAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
+        
       };
 
-      await addDoc(collection(db, 'donations'), donationData);
+      const res = await fetch('/api/donations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(donationData)
+      });
+      if (!res.ok) throw new Error('API error');
 
       // ✅ Show toast
       toast.success('🎉 Thank you! Your donation has been posted.');
@@ -124,9 +211,11 @@ const Donation = () => {
         pickupName: '',
         pickupPhone: '',
       });
+      setErrors({});
+      
 
       // ✅ Navigate after small delay
-      setTimeout(() => navigate('/browse'), 1500);
+      setTimeout(() => navigate('/browsedonation'), 1500);
     } catch (err) {
       console.error('Error:', err);
       setError('Could not submit donation. Please try again.');
@@ -137,6 +226,12 @@ const Donation = () => {
   };
 
   const today = new Date().toISOString().split('T')[0];
+  const yesterdayStr = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[0];
+  const twoDaysBeforeStr = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[0];
 
   return (
     <div className="container my-5">
@@ -158,11 +253,16 @@ const Donation = () => {
                   <input
                     type="text"
                     name="foodItemName"
-                    className="form-control"
+                    className={`form-control ${errors.foodItemName ? 'is-invalid' : ''}`}
+                    pattern="[A-Za-z\s]+"
+                    title="Only letters and spaces are allowed"
                     value={formData.foodItemName}
                     onChange={handleChange}
                     required
                   />
+                  {errors.foodItemName && (
+                    <div className="invalid-feedback">{errors.foodItemName}</div>
+                  )}
                 </div>
                 
                 <div className="mb-3">
@@ -170,12 +270,15 @@ const Donation = () => {
                   <input
                     type="number"
                     name="quantity"
-                    className="form-control"
+                    className={`form-control ${errors.quantity ? 'is-invalid' : ''}`}
                     min="1"
                     value={formData.quantity}
                     onChange={handleChange}
                     required
                   />
+                  {errors.quantity && (
+                    <div className="invalid-feedback">{errors.quantity}</div>
+                  )}
                 </div>
                 <div className="mb-3">
                   <label className="form-label d-block">Veg / Non-Veg</label>
@@ -205,15 +308,21 @@ const Donation = () => {
                 <div className="row">
                   <div className="col-sm-6 mb-3">
                     <label className="form-label">Prepared On</label>
-                    <input
-                      type="date"
+                    <select
                       name="preparedOn"
-                      className="form-control"
+                      className={`form-select ${errors.preparedOn ? 'is-invalid' : ''}`}
                       value={formData.preparedOn}
                       onChange={handleChange}
-                      max={today}
                       required
-                    />
+                    >
+                      <option value="" disabled>Select prepared date</option>
+                      <option value={today}>{today}</option>
+                      <option value={yesterdayStr}>{yesterdayStr}</option>
+                      <option value={twoDaysBeforeStr}>{twoDaysBeforeStr}</option>
+                    </select>
+                    {errors.preparedOn && (
+                      <div className="invalid-feedback">{errors.preparedOn}</div>
+                    )}
                   </div>
                   <div className="col-sm-6 mb-3">
                     <label className="form-label">Expires In</label>
@@ -259,22 +368,32 @@ const Donation = () => {
                   <input
                     type="text"
                     name="pickupName"
-                    className="form-control"
+                    className={`form-control ${errors.pickupName ? 'is-invalid' : ''}`}
+                    pattern="[A-Za-z\s]+"
+                    title="Only letters and spaces are allowed"
                     value={formData.pickupName}
                     onChange={handleChange}
                     required
                   />
+                  {errors.pickupName && (
+                    <div className="invalid-feedback">{errors.pickupName}</div>
+                  )}
                 </div>
                 <div className="mb-3">
                   <label className="form-label">Phone Number</label>
                   <input
                     type="tel"
                     name="pickupPhone"
-                    className="form-control"
+                    className={`form-control ${errors.pickupPhone ? 'is-invalid' : ''}`}
                     value={formData.pickupPhone}
                     onChange={handleChange}
+                    inputMode="numeric"
+                    maxLength={10}
                     required
                   />
+                  {errors.pickupPhone && (
+                    <div className="invalid-feedback">{errors.pickupPhone}</div>
+                  )}
                 </div>
                 {error && <div className="alert alert-danger mt-3">{error}</div>}
                 <button

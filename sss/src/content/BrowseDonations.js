@@ -1,6 +1,4 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase.js';
 import {
   MapPinIcon,
   ClockIcon,
@@ -64,10 +62,6 @@ function timeLabel(expiryOn) {
   if (hours < 24) return `In ${hours} hr`;
   return `In ${days} d`;
 }
-function generatePlaceholderImage(text) {
-  const q = encodeURIComponent(text || 'food');
-  return `https://source.unsplash.com/random/400x400/?${q}`;
-}
 
 // =================================================================================
 // useDonations Hook
@@ -84,35 +78,32 @@ function useDonations() {
   });
 
   useEffect(() => {
-    const donationsCollectionRef = collection(db, 'donations');
-    const q = query(donationsCollectionRef, where('status', '==', 'notAccepted'));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const donationsData = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-          preparedOn: d.data().preparedOn?.toDate(),
-          expiryOn: d.data().expiryOn?.toDate(),
-          createdAt: d.data().createdAt?.toDate()
-        }));
-
-        const normalized = donationsData.map((d) => ({
+    let isActive = true;
+    const fetchDonations = async () => {
+      try {
+        const res = await fetch('/api/donations');
+        const data = await res.json();
+        if (!isActive) return;
+        const normalized = (data || []).map((d) => ({
           ...d,
+          preparedOn: d.preparedOn ? new Date(d.preparedOn) : undefined,
+          expiryOn: d.expiryOn ? new Date(d.expiryOn) : undefined,
+          createdAt: d.createdAt ? new Date(d.createdAt) : undefined,
           coords: parseCoordsFromAddress(d.address)
         }));
-
         setAllDonations(normalized);
-        setIsLoading(false);
-      },
-      (error) => {
-        console.error('Firebase fetch error:', error);
-        setIsLoading(false);
+      } catch (error) {
+        console.error('API fetch error:', error);
+      } finally {
+        if (isActive) setIsLoading(false);
       }
-    );
-
-    return () => unsubscribe();
+    };
+    fetchDonations();
+    const intervalId = setInterval(fetchDonations, 10000);
+    return () => {
+      isActive = false;
+      clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -141,9 +132,15 @@ function useDonations() {
   }, [allDonations, filters]);
 
   const updateDonationStatus = useCallback(async (dId, status) => {
-    const donationDocRef = doc(db, 'donations', dId);
     try {
-      await updateDoc(donationDocRef, { status: status });
+      const res = await fetch(`/api/donations/${encodeURIComponent(dId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) throw new Error('Failed');
+      // Optimistically update local state
+      setAllDonations((prev) => prev.map((d) => (d.id === dId ? { ...d, status } : d)));
     } catch (err) {
       console.error('Failed to update status:', err);
       alert('Could not update donation status.');
@@ -253,13 +250,6 @@ export default function BrowseDonations() {
                   return (
                     <div key={donation.id} className="donation-card">
                       <div className="card-top-section">
-                        <div className="card-image-wrapper">
-                          <img
-                            alt={donation.itemName}
-                            className="card-image"
-                            src={generatePlaceholderImage(donation.itemName)}
-                          />
-                        </div>
                         <div className="card-details">
                           <h2 className="card-title">{donation.itemName}</h2>
                           <div className="details-grid">
