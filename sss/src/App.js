@@ -5,11 +5,13 @@ import HomePage from './content/HomePage';
 import Donation from './Pages/Donation';
 import BrowseDonations from './content/BrowseDonations';
 import PageNotFound from './content/PageNotFound';
+import { Toaster } from 'react-hot-toast'; 
 
 // Imports are consolidated into one line for cleanliness
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import AboutPage from './content/AboutPage';
 import Impact from './content/Impact';
+
 
 function App() {
   return (
@@ -17,6 +19,7 @@ function App() {
     <>
       <Router>
         <Navbar />
+        <Toaster position="top-right" />
         <Routes>
           {/* Use the "element" prop for components in v6 */}
           <Route path='/' element={<HomePage />} />

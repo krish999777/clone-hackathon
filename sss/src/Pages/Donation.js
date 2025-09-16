@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const Donation = () => {
   const navigate = useNavigate();
@@ -34,7 +36,7 @@ const Donation = () => {
       return;
     }
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
+      toast.error("Geolocation is not supported by your browser.");
       e.target.checked = false;
       return;
     }
@@ -59,7 +61,9 @@ const Donation = () => {
         }
       },
       (err) => {
-        alert(err.code === 1 ? 'Please allow location access.' : 'Could not get your location.');
+        toast.error(
+          err.code === 1 ? 'Please allow location access.' : 'Could not get your location.'
+        );
         setFormData((prev) => ({ ...prev, address: '' }));
         setIsFetchingLocation(false);
         e.target.checked = false;
@@ -77,22 +81,19 @@ const Donation = () => {
     });
   };
 
-  // Handle form submit with Firebase
+  // ✅ Updated handleSubmit with toast + reset
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     setIsSubmitting(true);
     setError(null);
 
     try {
-      // Calculate expiry
       const preparedDate = new Date(formData.preparedOn);
       const hoursToExpire = Number(formData.expiryTime);
       const expiryDate = new Date(
         preparedDate.getTime() + hoursToExpire * 60 * 60 * 1000
       );
 
-      // Donation payload (no image now)
       const donationData = {
         itemName: formData.foodItemName,
         meals: Number(formData.quantity),
@@ -107,14 +108,29 @@ const Donation = () => {
         createdAt: serverTimestamp(),
       };
 
-      // Save to Firestore
       await addDoc(collection(db, 'donations'), donationData);
 
-      alert('🎉 Thank you! Your donation has been posted.');
-      navigate('/browse');
+      // ✅ Show toast
+      toast.success('🎉 Thank you! Your donation has been posted.');
+
+      // ✅ Reset form
+      setFormData({
+        foodItemName: '',
+        quantity: '',
+        vegNonVeg: 'Veg',
+        preparedOn: '',
+        expiryTime: '24',
+        address: '',
+        pickupName: '',
+        pickupPhone: '',
+      });
+
+      // ✅ Navigate after small delay
+      setTimeout(() => navigate('/browse'), 1500);
     } catch (err) {
       console.error('Error:', err);
       setError('Could not submit donation. Please try again.');
+      toast.error('❌ Could not submit donation. Try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -124,6 +140,9 @@ const Donation = () => {
 
   return (
     <div className="container my-5">
+      {/* Toast container */}
+      <ToastContainer position="top-center" autoClose={2000} />
+
       <div className="row justify-content-center">
         <div className="col-lg-10">
           <h2 className="text-success text-center mb-4" style={{ fontWeight: 600 }}>

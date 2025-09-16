@@ -5,13 +5,13 @@ import { getStorage } from "firebase/storage"; // Import Storage
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyC0EJim4QVVIfG4Fg5di2OxgeFXna6v53Q",
-  authDomain: "food-for-life-98de1.firebaseapp.com",
-  projectId: "food-for-life-98de1",
-  storageBucket: "food-for-life-98de1.firebasestorage.app",
-  messagingSenderId: "198907444411",
-  appId: "1:198907444411:web:38c939761ae14ade433d9e",
-  measurementId: "G-R8PG931S6E"
+  apiKey: "AIzaSyD1MEebumtENXwtKC1CBmqiQgkcXRVTUbw",
+  authDomain: "food-for-li.firebaseapp.com",
+  projectId: "food-for-li",
+  storageBucket: "food-for-li.firebasestorage.app",
+  messagingSenderId: "489894629274",
+  appId: "1:489894629274:web:3b8451c7b99eee0ec8b423",
+  measurementId: "G-SRYDVDMREC"
 };
 
 const app = initializeApp(firebaseConfig);
