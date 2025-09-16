@@ -41,6 +41,7 @@ app.post('/api/donations', (req, res) => {
     preparedOn: d.preparedOn || now,
     expiryOn: d.expiryOn || now,
     address: d.address || '',
+    coordinates: d.coordinates || null,
     contactName: d.contactName || '',
     contactPhone: d.contactPhone || '',
     contactType: d.contactType || 'Individual',

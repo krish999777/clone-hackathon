@@ -1,0 +1,68 @@
+/* LocationMap.css */
+.location-map-container {
+  margin-top: 1rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+}
+
+.location-map-container .leaflet-container {
+  border-radius: 0.5rem;
+}
+
+.map-info {
+  padding: 0.5rem;
+  background-color: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.map-info small {
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+/* Ensure map tiles load properly */
+.leaflet-tile {
+  filter: none !important;
+}
+
+/* Custom marker popup styling */
+.leaflet-popup-content {
+  margin: 8px 12px;
+  line-height: 1.4;
+  font-size: 13px;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+}
+
+/* Map fallback styling */
+.map-fallback {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+
+.map-placeholder {
+  text-align: center;
+  color: #6b7280;
+}
+
+.map-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.map-text {
+  font-size: 0.875rem;
+}
+
+.map-text strong {
+  color: #374151;
+  font-weight: 600;
+}

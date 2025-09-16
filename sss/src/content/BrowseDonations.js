@@ -14,16 +14,15 @@ import './BrowseDonations.css';
 // Utility Functions
 // =================================================================================
 const deg2rad = (d) => d * (Math.PI / 180);
-const getDistanceFromCoords = (coords) => {
-  const MUMBAI_CENTER = { lat: 19.0760, lon: 72.8777 };
-  if (!coords) return Math.round((Math.random() * 11 + 0.3) * 10) / 10;
-  const R = 6371;
-  const dLat = deg2rad(coords.lat - MUMBAI_CENTER.lat);
-  const dLon = deg2rad(coords.lon - MUMBAI_CENTER.lon);
+const getDistanceFromCoords = (coords1, coords2) => {
+  if (!coords1 || !coords2) return Math.round((Math.random() * 11 + 0.3) * 10) / 10;
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = deg2rad(coords2.lat - coords1.lat);
+  const dLon = deg2rad(coords2.lon - coords1.lon);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(MUMBAI_CENTER.lat)) *
-      Math.cos(deg2rad(coords.lat)) *
+    Math.cos(deg2rad(coords1.lat)) *
+      Math.cos(deg2rad(coords2.lat)) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -51,16 +50,41 @@ const getStatusBadge = (status) => {
   return { text: '', icon: null, type: '' };
 };
 function timeLabel(expiryOn) {
-  const ms = getTimeToExpiryMs(expiryOn);
-  if (ms === Infinity) return '—';
-  if (ms <= 0) return 'Expired';
-  const minutes = Math.floor(ms / 60000);
+  if (!expiryOn) return '—';
+  
+  const expiryDate = new Date(expiryOn);
+  const now = new Date();
+  
+  // Calculate time remaining in milliseconds
+  const timeRemaining = expiryDate.getTime() - now.getTime();
+  
+  // If expired, show "Expired"
+  if (timeRemaining <= 0) return 'Expired';
+  
+  // Convert to different time units
+  const minutes = Math.floor(timeRemaining / (1000 * 60));
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
+  
+  // Format time remaining
   if (minutes < 1) return 'Expires now';
-  if (minutes < 60) return `In ${minutes} min`;
-  if (hours < 24) return `In ${hours} hr`;
-  return `In ${days} d`;
+  if (minutes < 60) return `Expires in ${minutes} min`;
+  if (hours < 24) return `Expires in ${hours} hr`;
+  if (days < 7) return `Expires in ${days} day${days > 1 ? 's' : ''}`;
+  
+  // For longer periods, show date and time
+  const timeString = expiryDate.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+  
+  const dateString = expiryDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  });
+  
+  return `${dateString} ${timeString}`;
 }
 
 // =================================================================================
@@ -70,12 +94,37 @@ function useDonations() {
   const [allDonations, setAllDonations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filteredAndSorted, setFilteredAndSorted] = useState([]);
+  const [userLocation, setUserLocation] = useState(null);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [filters, setFilters] = useState({
     sortBy: 'time',
     vegOnly: false,
     minMeals: 1,
     query: ''
   });
+
+  // Get user's current location
+  const getUserLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      console.warn('Geolocation is not supported by this browser.');
+      return;
+    }
+    
+    setIsGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lon: position.coords.longitude
+        });
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        console.warn('Error getting location:', error);
+        setIsGettingLocation(false);
+      }
+    );
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -89,7 +138,7 @@ function useDonations() {
           preparedOn: d.preparedOn ? new Date(d.preparedOn) : undefined,
           expiryOn: d.expiryOn ? new Date(d.expiryOn) : undefined,
           createdAt: d.createdAt ? new Date(d.createdAt) : undefined,
-          coords: parseCoordsFromAddress(d.address)
+          coords: d.coordinates || parseCoordsFromAddress(d.address)
         }));
         setAllDonations(normalized);
       } catch (error) {
@@ -110,7 +159,7 @@ function useDonations() {
     let out = allDonations.map((d) => ({
       ...d,
       _timeToExpiry: getTimeToExpiryMs(d.expiryOn),
-      _distanceKm: getDistanceFromCoords(d.coords)
+      _distanceKm: userLocation ? getDistanceFromCoords(userLocation, d.coords) : Math.round((Math.random() * 11 + 0.3) * 10) / 10
     }));
 
     if (filters.vegOnly) out = out.filter((d) => d.veg === true);
@@ -129,7 +178,7 @@ function useDonations() {
     if (filters.sortBy === 'time') out.sort((a, b) => a._timeToExpiry - b._timeToExpiry);
 
     setFilteredAndSorted(out);
-  }, [allDonations, filters]);
+  }, [allDonations, filters, userLocation]);
 
   const updateDonationStatus = useCallback(async (dId, status) => {
     try {
@@ -152,7 +201,10 @@ function useDonations() {
     setFilters,
     filteredAndSorted,
     updateDonationStatus,
-    isLoading
+    isLoading,
+    getUserLocation,
+    userLocation,
+    isGettingLocation
   };
 }
 
@@ -160,7 +212,16 @@ function useDonations() {
 // Component
 // =================================================================================
 export default function BrowseDonations() {
-  const { filters, setFilters, filteredAndSorted, updateDonationStatus, isLoading } = useDonations();
+  const { 
+    filters, 
+    setFilters, 
+    filteredAndSorted, 
+    updateDonationStatus, 
+    isLoading, 
+    getUserLocation, 
+    userLocation, 
+    isGettingLocation 
+  } = useDonations();
 
   const handleAccept = useCallback(
     (dId) => {
@@ -229,6 +290,22 @@ export default function BrowseDonations() {
                 />
               </div>
             </div>
+            <div className="filter-group">
+              <label>Location</label>
+              <button 
+                className="location-button"
+                onClick={getUserLocation}
+                disabled={isGettingLocation}
+              >
+                <MapPinIcon className="location-icon" />
+                {isGettingLocation ? 'Getting Location...' : userLocation ? 'Location Detected' : 'Use My Location'}
+              </button>
+              {userLocation && (
+                <div className="location-info">
+                  <small>Location detected! Distance sorting is now accurate.</small>
+                </div>
+              )}
+            </div>
           </aside>
 
           {/* Donations Grid */}
@@ -257,7 +334,7 @@ export default function BrowseDonations() {
                             <div className="detail-value">{donation.meals || '—'}</div>
                             <div className="detail-label">Type</div>
                             <div className="detail-value">{donation.veg ? 'Veg' : 'Non-Veg'}</div>
-                            <div className="detail-label">Expires</div>
+                            <div className="detail-label">Expires In</div>
                             <div className="detail-value">{timeLabel(donation.expiryOn)}</div>
                             <div className="detail-label">Donor</div>
                             <div className="detail-value">{donation.contactName || '—'}</div>

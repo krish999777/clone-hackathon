@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 // Removed Firestore in favor of simple JSON API
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import ImprovedLocationMap from '../components/ImprovedLocationMap';
+import { geocodeAddressImproved } from '../utils/improvedGeocoding';
 
 const Donation = () => {
   const navigate = useNavigate();
@@ -14,6 +16,7 @@ const Donation = () => {
     preparedOn: '',
     expiryTime: '24',
     address: '',
+    coordinates: null,
     pickupName: '',
     pickupPhone: '',
   });
@@ -78,8 +81,9 @@ const Donation = () => {
 
   const hasErrors = (errs) => Object.keys(errs).length > 0;
 
+
   // Handle text inputs
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { name, value } = e.target;
     let nextValue = value;
     if (name === 'pickupPhone') {
@@ -90,7 +94,16 @@ const Donation = () => {
       // keep only digits, allow empty, no leading zeros normalization
       nextValue = String(value).replace(/\D/g, '');
     }
+    
     setFormData((prev) => ({ ...prev, [name]: nextValue }));
+    
+    // If address is being changed manually, try to geocode it
+    if (name === 'address' && nextValue.trim() !== '') {
+      const coords = await geocodeAddressImproved(nextValue);
+      console.log('Setting coordinates in form data:', coords);
+      setFormData((prev) => ({ ...prev, coordinates: coords }));
+    }
+    
     // live-validate the changed field
     setErrors((prev) => {
       const updated = { ...prev };
@@ -103,7 +116,7 @@ const Donation = () => {
   // Fetch current location
   const handleUseLocation = (e) => {
     if (!e.target.checked) {
-      setFormData((prev) => ({ ...prev, address: '' }));
+      setFormData((prev) => ({ ...prev, address: '', coordinates: null }));
       return;
     }
     if (!navigator.geolocation) {
@@ -124,10 +137,11 @@ const Donation = () => {
           setFormData((prev) => ({
             ...prev,
             address: data.display_name || 'Could not determine address',
+            coordinates: { lat: coords.latitude, lon: coords.longitude }
           }));
           
         } catch {
-          setFormData((prev) => ({ ...prev, address: 'Failed to fetch address.' }));
+          setFormData((prev) => ({ ...prev, address: 'Failed to fetch address.', coordinates: null }));
         } finally {
           setIsFetchingLocation(false);
         }
@@ -136,7 +150,7 @@ const Donation = () => {
         toast.error(
           err.code === 1 ? 'Please allow location access.' : 'Could not get your location.'
         );
-        setFormData((prev) => ({ ...prev, address: '' }));
+        setFormData((prev) => ({ ...prev, address: '', coordinates: null }));
         setIsFetchingLocation(false);
         e.target.checked = false;
       }
@@ -169,11 +183,12 @@ const Donation = () => {
         return;
       }
 
-      const preparedDate = new Date(formData.preparedOn);
+      const preparedDate = new Date(formData.preparedOn + 'T00:00:00');
       const hoursToExpire = Number(formData.expiryTime);
-      const expiryDate = new Date(
-        preparedDate.getTime() + hoursToExpire * 60 * 60 * 1000
-      );
+      const now = new Date();
+      
+      // Expiry is always calculated from now + the entered hours, regardless of prepared date
+      const expiryDate = new Date(now.getTime() + hoursToExpire * 60 * 60 * 1000);
 
       const donationData = {
         itemName: formData.foodItemName,
@@ -182,6 +197,7 @@ const Donation = () => {
         preparedOn: preparedDate.toISOString(),
         expiryOn: expiryDate.toISOString(),
         address: formData.address,
+        coordinates: formData.coordinates,
         contactName: formData.pickupName,
         contactPhone: formData.pickupPhone,
         contactType: 'Individual',
@@ -208,6 +224,7 @@ const Donation = () => {
         preparedOn: '',
         expiryTime: '24',
         address: '',
+        coordinates: null,
         pickupName: '',
         pickupPhone: '',
       });
@@ -225,13 +242,10 @@ const Donation = () => {
     }
   };
 
-  const today = new Date().toISOString().split('T')[0];
-  const yesterdayStr = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split('T')[0];
-  const twoDaysBeforeStr = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split('T')[0];
+  // Fixed dates for dropdown: 15th, 16th, 17th
+  const twoDaysBeforeStr = '2025-09-15'; // 15th
+  const yesterdayStr = '2025-09-16';     // 16th  
+  const today = '2025-09-17';            // 17th
 
   return (
     <div className="container my-5">
@@ -316,9 +330,9 @@ const Donation = () => {
                       required
                     >
                       <option value="" disabled>Select prepared date</option>
-                      <option value={today}>{today}</option>
-                      <option value={yesterdayStr}>{yesterdayStr}</option>
                       <option value={twoDaysBeforeStr}>{twoDaysBeforeStr}</option>
+                      <option value={yesterdayStr}>{yesterdayStr}</option>
+                      <option value={today}>{today}</option>
                     </select>
                     {errors.preparedOn && (
                       <div className="invalid-feedback">{errors.preparedOn}</div>
@@ -352,6 +366,13 @@ const Donation = () => {
                     required
                   />
                 </div>
+                
+                {/* Location Map */}
+                <ImprovedLocationMap 
+                  coordinates={formData.coordinates} 
+                  address={formData.address}
+                />
+                
                 <div className="mb-3">
                   <div className="form-check">
                     <input

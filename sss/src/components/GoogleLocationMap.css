@@ -1,0 +1,66 @@
+/* GoogleLocationMap.css */
+.location-map-container {
+  margin-top: 1rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+}
+
+.google-map-container {
+  position: relative;
+}
+
+.google-map {
+  height: 200px;
+  width: 100%;
+  border-radius: 0.5rem;
+}
+
+.map-info {
+  padding: 0.5rem;
+  background-color: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.map-info small {
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.map-loading {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.map-error {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #dc2626;
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+/* Google Maps specific styling */
+.gm-style-iw {
+  border-radius: 8px !important;
+}
+
+.gm-style-iw-d {
+  overflow: hidden !important;
+}
+
+/* Ensure map tiles load properly */
+.gm-style img {
+  max-width: none !important;
+}
